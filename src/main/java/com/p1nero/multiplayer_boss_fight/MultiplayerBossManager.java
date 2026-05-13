@@ -19,9 +19,11 @@ import net.minecraftforge.fml.loading.FMLPaths;
 import net.minecraftforge.registries.ForgeRegistries;
 import org.slf4j.Logger;
 
+import java.io.InputStream;
 import java.io.IOException;
 import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -36,35 +38,92 @@ public class MultiplayerBossManager {
     private static final Gson GSON = new Gson();
     private static final Type CONFIG_LIST_TYPE = new TypeToken<List<RawBossConfig>>() {
     }.getType();
+    private static final String DEFAULT_CONFIG_RESOURCE = "config.json";
+    private static final String DEMO_CONFIG_RESOURCE = "demo.jsonc";
+    private static final Path CONFIG_DIR = FMLPaths.CONFIGDIR.get()
+            .resolve(MultiplayerBossFightMod.MOD_ID);
     private static final Path CONFIG_PATH = FMLPaths.CONFIGDIR.get()
             .resolve(MultiplayerBossFightMod.MOD_ID)
-            .resolve("config.jsonc");
+            .resolve(DEFAULT_CONFIG_RESOURCE);
     private static final List<ResolvedBossConfig> CONFIGS = new ArrayList<>();
 
     public static void init() {
         CONFIGS.clear();
-        if (!Files.exists(CONFIG_PATH)) {
-            LOGGER.warn("Boss config file does not exist: {}", CONFIG_PATH);
+        try {
+            Files.createDirectories(CONFIG_DIR);
+        } catch (IOException exception) {
+            LOGGER.error("Failed to create config directory: {}", CONFIG_DIR, exception);
             return;
         }
 
+        if (!Files.exists(CONFIG_PATH)) {
+            LOGGER.warn("Boss config file does not exist: {}, restoring defaults", CONFIG_PATH);
+            if (!restoreDefaultConfigs()) {
+                return;
+            }
+        }
+
+        if (!loadConfigsFromDisk()) {
+            LOGGER.warn("Boss config file is invalid or damaged, restoring defaults from resources");
+            if (!restoreDefaultConfigs()) {
+                return;
+            }
+            if (!loadConfigsFromDisk()) {
+                LOGGER.error("Failed to load restored boss config from {}", CONFIG_PATH);
+            }
+        }
+    }
+
+    private static boolean loadConfigsFromDisk() {
         try {
             String json = stripJsonComments(Files.readString(CONFIG_PATH, StandardCharsets.UTF_8));
             List<RawBossConfig> rawConfigs = GSON.fromJson(json, CONFIG_LIST_TYPE);
             if (rawConfigs == null) {
                 LOGGER.warn("Boss config file is empty: {}", CONFIG_PATH);
-                return;
+                return false;
             }
 
+            List<ResolvedBossConfig> loadedConfigs = new ArrayList<>();
             for (RawBossConfig rawConfig : rawConfigs) {
                 ResolvedBossConfig resolvedConfig = resolveConfig(rawConfig);
                 if (resolvedConfig != null) {
-                    CONFIGS.add(resolvedConfig);
+                    loadedConfigs.add(resolvedConfig);
                 }
             }
+
+            if (loadedConfigs.isEmpty()) {
+                LOGGER.warn("No valid boss config entries found in {}", CONFIG_PATH);
+                return false;
+            }
+
+            CONFIGS.clear();
+            CONFIGS.addAll(loadedConfigs);
             LOGGER.info("Loaded {} multiplayer boss config entries from {}", CONFIGS.size(), CONFIG_PATH);
+            return true;
         } catch (IOException | JsonSyntaxException exception) {
             LOGGER.error("Failed to load multiplayer boss config from {}", CONFIG_PATH, exception);
+            return false;
+        }
+    }
+
+    private static boolean restoreDefaultConfigs() {
+        try {
+            Files.createDirectories(CONFIG_DIR);
+            copyResourceToConfig(DEFAULT_CONFIG_RESOURCE, CONFIG_DIR.resolve(DEFAULT_CONFIG_RESOURCE));
+            copyResourceToConfig(DEMO_CONFIG_RESOURCE, CONFIG_DIR.resolve(DEMO_CONFIG_RESOURCE));
+            return true;
+        } catch (IOException exception) {
+            LOGGER.error("Failed to restore default boss config files to {}", CONFIG_DIR, exception);
+            return false;
+        }
+    }
+
+    private static void copyResourceToConfig(String resourcePath, Path targetPath) throws IOException {
+        try (InputStream inputStream = MultiplayerBossFightMod.class.getClassLoader().getResourceAsStream(resourcePath)) {
+            if (inputStream == null) {
+                throw new IOException("Missing bundled resource: " + resourcePath);
+            }
+            Files.copy(inputStream, targetPath, StandardCopyOption.REPLACE_EXISTING);
         }
     }
 

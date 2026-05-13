@@ -153,6 +153,7 @@ public class MultiplayerBossManager {
             }
 
             attributeInstance.removeModifier(modifierConfig.id());
+            nearbyPlayers -= 1;//排除自己
             if (nearbyPlayers <= 0 || nearbyPlayers > modifierConfig.maxLimit()) {
                 continue;
             }
@@ -366,7 +367,7 @@ public class MultiplayerBossManager {
         }
     }
 
-    private record ResolvedBossConfig(
+    public record ResolvedBossConfig(
             Set<EntityType<?>> entityTypes,
             List<TagKey<EntityType<?>>> entityTags,
             List<ResolvedAttributeModifier> attributeModifiers

@@ -4,8 +4,11 @@ import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 import com.google.gson.reflect.TypeToken;
 import com.mojang.logging.LogUtils;
+import net.minecraft.core.Holder;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
@@ -14,9 +17,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.ai.attributes.Attribute;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
-import net.minecraftforge.fml.common.Mod;
-import net.minecraftforge.fml.loading.FMLPaths;
-import net.minecraftforge.registries.ForgeRegistries;
+import net.neoforged.fml.loading.FMLPaths;
 import org.slf4j.Logger;
 
 import java.io.InputStream;
@@ -30,9 +31,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.UUID;
 
-@Mod.EventBusSubscriber(modid = MultiplayerBossFightMod.MOD_ID)
 public class MultiplayerBossManager {
     private static final Logger LOGGER = LogUtils.getLogger();
     private static final Gson GSON = new Gson();
@@ -158,7 +157,6 @@ public class MultiplayerBossManager {
             double amount = modifierConfig.value() * nearbyPlayers;
             AttributeModifier modifier = new AttributeModifier(
                     modifierConfig.id(),
-                    MultiplayerBossFightMod.MOD_ID + ":" + modifierConfig.attributeId(),
                     amount,
                     modifierConfig.operation()
             );
@@ -199,7 +197,7 @@ public class MultiplayerBossManager {
             }
 
             if (entityId.startsWith("#")) {
-                ResourceLocation tagLocation = ResourceLocation.tryParse(entityId.substring(1));
+                ResourceLocation tagLocation = parseResourceLocation(entityId.substring(1));
                 if (tagLocation == null) {
                     LOGGER.warn("Invalid entity tag in config: {}", entityId);
                     continue;
@@ -208,13 +206,13 @@ public class MultiplayerBossManager {
                 continue;
             }
 
-            ResourceLocation entityLocation = ResourceLocation.tryParse(entityId);
+            ResourceLocation entityLocation = parseResourceLocation(entityId);
             if (entityLocation == null) {
                 LOGGER.warn("Invalid entity id in config: {}", entityId);
                 continue;
             }
 
-            EntityType<?> entityType = ForgeRegistries.ENTITY_TYPES.getValue(entityLocation);
+            EntityType<?> entityType = BuiltInRegistries.ENTITY_TYPE.get(entityLocation);
             if (entityType == null) {
                 LOGGER.warn("Unknown entity id in config: {}", entityId);
                 continue;
@@ -241,33 +239,42 @@ public class MultiplayerBossManager {
             return null;
         }
 
-        ResourceLocation attributeLocation = ResourceLocation.tryParse(rawModifier.attribute());
+        ResourceLocation attributeLocation = parseResourceLocation(rawModifier.attribute());
         if (attributeLocation == null) {
             LOGGER.warn("Invalid attribute id in config: {}", rawModifier.attribute());
             return null;
         }
 
-        Attribute attribute = ForgeRegistries.ATTRIBUTES.getValue(attributeLocation);
-        if (attribute == null) {
+        ResourceKey<Attribute> attributeKey = ResourceKey.create(Registries.ATTRIBUTE, attributeLocation);
+        Holder.Reference<Attribute> attributeHolder = BuiltInRegistries.ATTRIBUTE.getHolder(attributeKey).orElse(null);
+        if (attributeHolder == null) {
             LOGGER.warn("Unknown attribute id in config: {}", rawModifier.attribute());
             return null;
         }
 
         try {
             AttributeModifier.Operation operation = AttributeModifier.Operation.valueOf(rawModifier.operation());
-            UUID id = UUID.nameUUIDFromBytes(
-                    (MultiplayerBossFightMod.MOD_ID + ":" + rawModifier.attribute()).getBytes(StandardCharsets.UTF_8)
+            ResourceLocation modifierId = ResourceLocation.fromNamespaceAndPath(
+                    MultiplayerBossFightMod.MOD_ID,
+                    rawModifier.attribute().replace(':', '/')
             );
             return new ResolvedAttributeModifier(
-                    rawModifier.attribute(),
-                    attribute,
+                    attributeHolder,
                     operation,
                     rawModifier.value(),
                     Math.max(0, rawModifier.maxLimit()),
-                    id
+                    modifierId
             );
         } catch (IllegalArgumentException exception) {
             LOGGER.warn("Invalid attribute modifier operation in config: {}", rawModifier.operation());
+            return null;
+        }
+    }
+
+    private static ResourceLocation parseResourceLocation(String id) {
+        try {
+            return ResourceLocation.parse(id);
+        } catch (RuntimeException exception) {
             return null;
         }
     }
@@ -368,12 +375,11 @@ public class MultiplayerBossManager {
     }
 
     private record ResolvedAttributeModifier(
-            String attributeId,
-            Attribute attribute,
+            Holder<Attribute> attribute,
             AttributeModifier.Operation operation,
             double value,
             int maxLimit,
-            UUID id
+            ResourceLocation id
     ) {
     }
 }

@@ -54,3 +54,27 @@ Example `config/multiplayer_boss_fight/config.json`:
   }
 ]
 ```
+## Parameter Explanation
+
+*   **`entities`**
+
+    List of boss entity IDs. You can use tags (prefixed with `#`).
+
+*   **`attribute_modifiers`**
+
+    A list of attribute modifications, each containing:
+
+    *   `attribute` – Attribute to modify (e.g. `generic.max_health`).
+    *   `operation` – `ADDITION`, `MULTIPLY_BASE`, or `MULTIPLY_TOTAL`.
+    *   `value` – Multiplier **per player** (e.g., `0.4` = +40% per player).
+    *   `max_limit` – Upper limit of players that affect the boss. Additional players will not increase stats further.
+
+## Compatibility
+
+*   Works in multiplayer (dedicated server & LAN).
+*   Optional in client installation (pure server‑side mod).
+*   Safe to add/remove mid‑game.
+
+***
+
+**Enjoy balanced boss fights for any group size!**

@@ -143,6 +143,9 @@ public class MultiplayerBossManager {
     }
 
     private static void applyAttributeModifiers(LivingEntity livingEntity, ResolvedBossConfig config, int nearbyPlayers) {
+        double oldMaxHealth = livingEntity.getMaxHealth();
+        double currentHealth = livingEntity.getHealth();
+
         for (ResolvedAttributeModifier modifierConfig : config.attributeModifiers()) {
             AttributeInstance attributeInstance = livingEntity.getAttribute(modifierConfig.attribute());
             if (attributeInstance == null) {
@@ -161,6 +164,14 @@ public class MultiplayerBossManager {
                     modifierConfig.operation()
             );
             attributeInstance.addTransientModifier(modifier);
+        }
+
+        double newMaxHealth = livingEntity.getMaxHealth();
+
+        if (oldMaxHealth > 0) {
+            double ratio = newMaxHealth / oldMaxHealth;
+            double newHealth = currentHealth * ratio;
+            livingEntity.setHealth((float) Math.min(newMaxHealth, newHealth));
         }
 
         if (livingEntity.getHealth() > livingEntity.getMaxHealth()) {

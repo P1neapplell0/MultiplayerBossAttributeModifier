@@ -6,6 +6,7 @@ import com.google.gson.reflect.TypeToken;
 import com.mojang.logging.LogUtils;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
@@ -127,7 +128,7 @@ public class MultiplayerBossManager {
         }
     }
 
-    public static void refreshBossAttributes(Entity target) {
+    public static void refreshBossAttributes(Entity target, Player trackingPlayer, boolean isJoin) {
         if (!(target instanceof LivingEntity livingEntity) || target.level().isClientSide()) {
             return;
         }
@@ -138,9 +139,19 @@ public class MultiplayerBossManager {
         }
 
         int range = Math.max(1, target.getType().clientTrackingRange()) * 16;
-        int nearbyPlayers = target.level().getEntitiesOfClass(Player.class, target.getBoundingBox().inflate(range),
-                player -> player.isAlive() && !player.isSpectator()).size();
+        int nearbyPlayers = ((int) target.level().players().stream().filter(
+                player -> player.isAlive() && !player.isSpectator()
+                        && horizontalDistance(livingEntity, player) < range && !player.is(trackingPlayer)).count());
+        if(isJoin) {
+            nearbyPlayers += 1;//确保被追踪的玩家被算进来，以处理加入世界时= =
+        }
         applyAttributeModifiers(livingEntity, config, nearbyPlayers);
+    }
+
+    private static double horizontalDistance(Entity e1, Entity e2) {
+        double dx = e1.getX() - e2.getX();
+        double dz = e1.getZ() - e2.getZ();
+        return Math.sqrt(dx * dx + dz * dz);
     }
 
     private static void applyAttributeModifiers(LivingEntity livingEntity, ResolvedBossConfig config, int nearbyPlayers) {

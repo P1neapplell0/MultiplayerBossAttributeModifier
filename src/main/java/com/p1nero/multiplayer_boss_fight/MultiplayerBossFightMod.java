@@ -29,11 +29,11 @@ public class MultiplayerBossFightMod {
     }
 
     private void onStartSeenByPlayer(PlayerEvent.StartTracking event) {
-        MultiplayerBossManager.refreshBossAttributes(event.getTarget());
+        MultiplayerBossManager.refreshBossAttributes(event.getTarget(), event.getEntity(), true);
     }
 
     private void onStopSeenByPlayer(PlayerEvent.StopTracking event) {
-        MultiplayerBossManager.refreshBossAttributes(event.getTarget());
+        MultiplayerBossManager.refreshBossAttributes(event.getTarget(), event.getEntity(), false);
     }
 
 }
